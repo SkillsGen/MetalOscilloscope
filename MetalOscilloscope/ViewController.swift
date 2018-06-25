@@ -83,7 +83,7 @@ class ViewController: UIViewController {
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
         
         
-        // Trace texture/buffer/whatever
+        // Trace texture
         let traceDesc: MTLTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: drawable.texture.pixelFormat,
                                                                                        width: drawable.texture.width,
                                                                                        height: drawable.texture.height, mipmapped: false)
@@ -96,14 +96,13 @@ class ViewController: UIViewController {
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
-    
-        
         renderEncoder.setRenderPipelineState(pipelineState)
         renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         renderEncoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
         let vertexCount = vertexData.count / 8
         renderEncoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: vertexCount, instanceCount: 1)
         renderEncoder.endEncoding()
+        
         
         // Blur trace
         let gaussKernel = MPSImageGaussianBlur(device: device, sigma: 6.0)
@@ -122,7 +121,7 @@ class ViewController: UIViewController {
         compute.dispatchThreadgroups(groupSize, threadsPerThreadgroup: groups)
         compute.endEncoding()
 
-        //Finish
+        
         commandBuffer.present(drawable)
         commandBuffer.commit()
     }
