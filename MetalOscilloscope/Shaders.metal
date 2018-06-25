@@ -29,55 +29,59 @@ vertex Vertex basic_vertex(constant Vertex* vertices   [[ buffer(0) ]],
                            constant Uniforms &uniforms [[ buffer(1) ]],
                            unsigned int vid            [[ vertex_id ]])
 {
-    float4x4 Matrix = uniforms.modelMatrix;
+    float4x4 matrix = uniforms.modelMatrix;
     //float4x4 projectionMatrix = uniforms.projectionMatrix;
     
-    Vertex In = vertices[vid];
-    Vertex Out;
+    Vertex in = vertices[vid];
+    Vertex out;
 
-    Out.position = Matrix * float4(In.position);
+    out.position = matrix * float4(in.position);
     
-    if(!(Out.position.x == 0.0f && Out.position.y == 0.0f))
+    // Barrel Distortion
+    float barrelDistortion = 0.95f;
+    if(!(out.position.x == 0.0f && out.position.y == 0.0f))
     {
-        float2 newcoords = float2(Out.position.x, Out.position.y);
+        float2 newCoords = float2(out.position.x, out.position.y);
         
-        float theta = atan2(newcoords.y, newcoords.x);
-        float radius = length(newcoords);
+        float theta = atan2(newCoords.y, newCoords.x);
+        float radius = length(newCoords);
         
-        radius = pow(radius, 0.95f);
-        float2 outcoords = float2(radius * cos(theta), radius * sin(theta));
+        radius = pow(radius, barrelDistortion);
+        float2 outCoords = float2(radius * cos(theta), radius * sin(theta));
         
-        Out.position.x = outcoords.x;
-        Out.position.y = outcoords.y;
+        out.position.x = outCoords.x;
+        out.position.y = outCoords.y;
     }
     
-    Out.color = In.color;
-    return Out;
+    out.color = in.color;
+    return out;
 }
 
-fragment frag_out basic_fragment(Vertex In [[ stage_in ]])
+fragment frag_out basic_fragment(Vertex in [[ stage_in ]])
 {
-    frag_out FragOut;
+    frag_out fragOut;
     
-    FragOut.color0 = float4(0.0, 0.0, 0.0, 1.0);
-    FragOut.color1 = float4(0.0, 0.0, 0.0, 1.0);
+    fragOut.color0 = float4(0.0, 0.0, 0.0, 1.0);
+    fragOut.color1 = float4(0.0, 0.0, 0.0, 1.0);
     
-    if(In.color[1] == 1.0)
+    if(in.color[1] == 1.0) // Seperate green trace
     {
-        FragOut.color1 = In.color; // Trace
+        fragOut.color1 = in.color; // Trace
     }
-    FragOut.color0 = In.color; // Grid
+    fragOut.color0 = in.color; // Grid
     
-    return FragOut;
+    return fragOut;
 }
 
+
+// Add back the blurred trace
 kernel void compute_shader(texture2d<float, access::read> grid    [[ texture(0) ]],
                            texture2d<float, access::read> trace   [[ texture(1) ]],
                            texture2d<float, access::write> dest   [[ texture(2) ]],
                            uint2 gid                              [[ thread_position_in_grid ]])
 {
     float4 gridColor = grid.read(gid);
-    float4 traceColor = trace.read(gid) * 5;
+    float4 traceColor = trace.read(gid) * 5;          //Make blurred trace brighter
     float4 resultColor = gridColor + traceColor;
     
     dest.write(resultColor, gid);

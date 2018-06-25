@@ -37,8 +37,8 @@ class ViewController: UIViewController {
         metalLayer.frame = view.layer.frame
         view.layer.addSublayer(metalLayer)
         
-        vertexData = genLines()
         
+        vertexData = genLines()
         let dataSize = vertexData.count * MemoryLayout.size(ofValue: vertexData[0])
         vertexBuffer = device.makeBuffer(bytes: vertexData, length: dataSize, options: [])
         
@@ -46,13 +46,12 @@ class ViewController: UIViewController {
         let scaling = scalingMatrix(scale: 1.0)
         let transsize = MemoryLayout<Float>.size * 16
         let rotation = rotationMatrix(rotVector: float3(0, 0, 0.0)) * scaling
-        var translation = translationMatrix(position: float3(0.0, 0.0, -0.0)) * rotation
-        
+        var translation = translationMatrix(position: float3(0.0, 0.0, 0.0)) * rotation
         var projMatrix = projectionMatrix(near: 0.1, far: 100, aspect: Float(self.view.bounds.size.width / self.view.bounds.size.height), fovy: 1.484)
-        
         uniformBuffer = device.makeBuffer(length: transsize * 2, options: [])
         memcpy(uniformBuffer.contents(), &translation, transsize)
         memcpy(uniformBuffer.contents() + transsize, &projMatrix, transsize)
+        
         
         let defaultLibrary = device.makeDefaultLibrary()!
         let fragmentProgram = defaultLibrary.makeFunction(name: "basic_fragment")
@@ -63,13 +62,12 @@ class ViewController: UIViewController {
         let pipelineStateDescriptor = MTLRenderPipelineDescriptor()
         pipelineStateDescriptor.vertexFunction = vertexProgram
         pipelineStateDescriptor.fragmentFunction = fragmentProgram
-        
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        pipelineStateDescriptor.colorAttachments[1].pixelFormat = .bgra8Unorm
+        pipelineStateDescriptor.colorAttachments[1].pixelFormat = .bgra8Unorm // Trace texture
         
         pipelineState = try! device.makeRenderPipelineState(descriptor: pipelineStateDescriptor)
-        
         commandQueue = device.makeCommandQueue()
+        
         
         timer = CADisplayLink(target: self, selector: #selector(ViewController.loop))
         timer.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
@@ -77,20 +75,20 @@ class ViewController: UIViewController {
 
     
     func render() {
-        guard let drawable = metalLayer?.nextDrawable() else { return }
-        let renderPassDescriptor = MTLRenderPassDescriptor()
+        let drawable = metalLayer!.nextDrawable()!
         
+        let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = drawable.texture
         renderPassDescriptor.colorAttachments[0].loadAction = .clear
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
         
         
+        // Trace texture/buffer/whatever
         let traceDesc: MTLTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: drawable.texture.pixelFormat,
                                                                                        width: drawable.texture.width,
                                                                                        height: drawable.texture.height, mipmapped: false)
         traceDesc.usage = [.shaderRead, .shaderWrite, .renderTarget]
         var traceTexture: MTLTexture = device.makeTexture(descriptor: traceDesc)!
-        
         renderPassDescriptor.colorAttachments[1].texture = traceTexture
         renderPassDescriptor.colorAttachments[1].loadAction = .clear
         renderPassDescriptor.colorAttachments[1].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
@@ -98,30 +96,33 @@ class ViewController: UIViewController {
         
         let commandBuffer = commandQueue.makeCommandBuffer()!
         let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)!
-        
-        let vertexCount = vertexData.count / 8
+    
         
         renderEncoder.setRenderPipelineState(pipelineState)
         renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         renderEncoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
+        let vertexCount = vertexData.count / 8
         renderEncoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: vertexCount, instanceCount: 1)
         renderEncoder.endEncoding()
         
-        
+        // Blur trace
         let gaussKernel = MPSImageGaussianBlur(device: device, sigma: 6.0)
         gaussKernel.encode(commandBuffer: commandBuffer, inPlaceTexture: &traceTexture, fallbackCopyAllocator: nil)
         
+        
+        // Add blurred texture back
         let compute = commandBuffer.makeComputeCommandEncoder()!
         compute.setComputePipelineState(computePipeline)
         compute.setTexture(drawable.texture, index: 0)
         compute.setTexture(traceTexture, index: 1)
         compute.setTexture(drawable.texture, index: 2)
         
-        let groupSize = MTLSize(width: 44, height: 44, depth: 1)
+        let groupSize = MTLSize(width: 64, height: 64, depth: 1)
         let groups = MTLSize(width: Int(view.bounds.size.width) / groupSize.width+1, height: Int(view.bounds.size.height) / groupSize.height+1, depth: 1)
         compute.dispatchThreadgroups(groupSize, threadsPerThreadgroup: groups)
         compute.endEncoding()
 
+        //Finish
         commandBuffer.present(drawable)
         commandBuffer.commit()
     }
@@ -152,8 +153,8 @@ class ViewController: UIViewController {
         // Generate Grid
         for i in 0...10 {
             for j in 0...9 {
-                Lines.append(Width/10 * Float(i) - 1)
-                Lines.append(Height/10 * Float(j) - 1)
+                Lines.append(Width/10 * Float(i) - Width/2)
+                Lines.append(Height/10 * Float(j) - Height/2)
                 Lines.append(0)
                 Lines.append(1)
                 
@@ -162,8 +163,8 @@ class ViewController: UIViewController {
                 Lines.append(0.3)
                 Lines.append(1)
                 
-                Lines.append(Width/10 * Float(i) - 1)
-                Lines.append(Height/10 * Float(j + 1) - 1)
+                Lines.append(Width/10 * Float(i) - Width/2)
+                Lines.append(Height/10 * Float(j + 1) - Height/2)
                 Lines.append(0)
                 Lines.append(1)
             
@@ -172,8 +173,8 @@ class ViewController: UIViewController {
                 Lines.append(0.3)
                 Lines.append(1)
                 
-                Lines.append(Width/10 * Float(j) - 1)
-                Lines.append(Height/10 * Float(i) - 1)
+                Lines.append(Width/10 * Float(j) - Width/2)
+                Lines.append(Height/10 * Float(i) - Height/2)
                 Lines.append(0)
                 Lines.append(1)
                 
@@ -182,8 +183,8 @@ class ViewController: UIViewController {
                 Lines.append(0.3)
                 Lines.append(1)
                 
-                Lines.append(Width/10 * Float(j + 1) - 1)
-                Lines.append(Height/10 * Float(i) - 1)
+                Lines.append(Width/10 * Float(j + 1) - Width/2)
+                Lines.append(Height/10 * Float(i) - Height/2)
                 Lines.append(0)
                 Lines.append(1)
                 
@@ -194,9 +195,9 @@ class ViewController: UIViewController {
             }
         }
         
-        // Generate Trace
+        // Generate Trace (sine wave for testing)
         for i in 0...99 {
-            Lines.append((Width/100 * Float(i)) - 1)
+            Lines.append((Width/100 * Float(i)) - Width/2)
             Lines.append(sin(Float(i) * Float.pi/50))
             Lines.append(0)
             Lines.append(1)
@@ -206,7 +207,7 @@ class ViewController: UIViewController {
             Lines.append(0)
             Lines.append(1)
             
-            Lines.append((Width/100 * Float(i+1)) - 1)
+            Lines.append((Width/100 * Float(i+1)) - Height/2)
             Lines.append(sin(Float(i+1) * Float.pi/50))
             Lines.append(0)
             Lines.append(1)
