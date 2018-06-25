@@ -71,7 +71,7 @@ class ViewController: UIViewController {
         
         commandQueue = device.makeCommandQueue()
         
-        timer = CADisplayLink(target: self, selector: #selector(ViewController.gameloop))
+        timer = CADisplayLink(target: self, selector: #selector(ViewController.loop))
         timer.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
     }
 
@@ -85,7 +85,9 @@ class ViewController: UIViewController {
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
         
         
-        let traceDesc: MTLTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: drawable.texture.pixelFormat, width: drawable.texture.width, height: drawable.texture.height, mipmapped: false)
+        let traceDesc: MTLTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: drawable.texture.pixelFormat,
+                                                                                       width: drawable.texture.width,
+                                                                                       height: drawable.texture.height, mipmapped: false)
         traceDesc.usage = [.shaderRead, .shaderWrite, .renderTarget]
         var traceTexture: MTLTexture = device.makeTexture(descriptor: traceDesc)!
         
@@ -125,7 +127,7 @@ class ViewController: UIViewController {
     }
     
     
-    @objc func gameloop() {
+    @objc func loop() {
         autoreleasepool {
             //vertexData[1] -= 0.001
             //memcpy(vertexBuffer.contents(), vertexData, vertexData.count * MemoryLayout.size(ofValue: vertexData[0]))
@@ -147,6 +149,7 @@ class ViewController: UIViewController {
         let Width: Float = 2
         let Height: Float = 2
         
+        // Generate Grid
         for i in 0...10 {
             for j in 0...9 {
                 Lines.append(Width/10 * Float(i) - 1)
@@ -191,6 +194,7 @@ class ViewController: UIViewController {
             }
         }
         
+        // Generate Trace
         for i in 0...99 {
             Lines.append((Width/100 * Float(i)) - 1)
             Lines.append(sin(Float(i) * Float.pi/50))
@@ -212,8 +216,6 @@ class ViewController: UIViewController {
             Lines.append(0)
             Lines.append(1)
         }
-        
-        
         return Lines
     }
     

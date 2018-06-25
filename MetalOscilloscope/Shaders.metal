@@ -45,7 +45,6 @@ vertex Vertex basic_vertex(constant Vertex* vertices   [[ buffer(0) ]],
         float radius = length(newcoords);
         
         radius = pow(radius, 0.95f);
-        
         float2 outcoords = float2(radius * cos(theta), radius * sin(theta));
         
         Out.position.x = outcoords.x;
@@ -62,7 +61,6 @@ fragment frag_out basic_fragment(Vertex In [[ stage_in ]])
     
     FragOut.color0 = float4(0.0, 0.0, 0.0, 1.0);
     FragOut.color1 = float4(0.0, 0.0, 0.0, 1.0);
-    
     
     if(In.color[1] == 1.0)
     {
